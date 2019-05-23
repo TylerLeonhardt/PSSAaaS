@@ -7,5 +7,5 @@ param($Request, $TriggerMetadata)
 Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
     StatusCode = [HttpStatusCode]::OK
     ContentType = 'text/html'
-    Body = Build-Html -Content (Get-ScriptForm)
+    Body = Build-Html -Content (Get-Monaco)
 })
