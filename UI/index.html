@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>PSScriptAnalyzer Demo</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <meta http-equiv="Content-Type" content="text/html;charset=utf-8">
+    <link rel="stylesheet" href="https://unpkg.com/chota@latest">
+    <link rel="stylesheet" data-name="vs/editor/editor.main"
+        href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.17.0/min/vs/editor/editor.main.css">
+    <style>
+        
+    </style>
+</head>
+
+<body>
+    <h2 style="background-color:darkcyan; margin-top:0; color:white; padding:10px;">PowerShell Script Analyzer demo</h2>
+    <div id="container" style="width:90%; max-width:800px; height:600px; margin:0 auto; border:1px solid grey;"></div>
+
+    <script type="text/javascript"
+        src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.17.0/min/vs/loader.js"></script>
+    <script>
+        require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.17.0/min/vs' } });
+
+        // Before loading vs/editor/editor.main, define a global MonacoEnvironment that overwrites
+        // the default worker url location (used when creating WebWorkers). The problem here is that
+        // HTML5 does not allow cross-domain web workers, so we need to proxy the instantiation of
+        // a web worker through a same-domain script
+        window.MonacoEnvironment = {
+            getWorkerUrl: function (workerId, label) {
+                return `data:text/javascript;charset=utf-8,${encodeURIComponent(`
+        self.MonacoEnvironment = {
+          baseUrl: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.17.0/min/'
+        };
+        importScripts('https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.17.0/min/vs/base/worker/workerMain.js');`
+                )}`;
+            }
+        };
+
+        require(["vs/editor/editor.main"], function () {
+            const editor = monaco.editor.create(document.getElementById('container'), {
+                value: '$x = 1 \ngci',
+                language: 'powershell',
+                automaticLayout: true
+            });
+
+            const SeverityMap = [
+                2, // PSSA is 0 => Monaco is 2 for Info
+                4, // PSSA is 1 => Monaco is 4 for Warning
+                8, // PSSA is 2 => Monaco is 8 for Error
+                8  // PSSA is 3 for ParseError => Monaco is 8 for Error
+            ]
+
+            const runPssa = async () => {
+                const rawResponse = await fetch('/api/ProcessScript', {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ script: editor.getModel().getLinesContent().join("\n") })
+                });
+
+                const content = await rawResponse.json();
+                console.log(content);
+                const markers = content.map((record) => {
+                    return {
+                        startLineNumber: record.Extent.StartLineNumber,
+                        startColumn: record.Extent.StartColumnNumber,
+                        endLineNumber: record.Extent.EndLineNumber,
+                        endColumn: record.Extent.EndColumnNumber,
+                        message: record.Message,
+                        severity: SeverityMap[record.Severity]
+                    }
+                })
+
+                monaco.editor.setModelMarkers(editor.getModel(), 'test', markers);
+            }
+
+            let typingTimer;
+            editor.onDidChangeModelContent((e) => {
+                if (typingTimer) { clearTimeout(typingTimer); }
+
+                typingTimer = setTimeout(runPssa, 200)
+            })
+
+            runPssa()
+        });
+    </script>
+</body>
+
+</html>
