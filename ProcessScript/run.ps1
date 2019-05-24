@@ -7,14 +7,22 @@ param($Request, $TriggerMetadata)
 Write-Host "PowerShell HTTP trigger function processed a request."
 
 # Interact with query parameters or the body of the request.
-$script = [System.Web.HttpUtility]::ParseQueryString($Request.Body)["script"]
-$results = Invoke-ScriptAnalyzer -ScriptDefinition $script
-
-$html = Build-Html -Content (Get-DiagnosticDisplay -DiagnosticRecord $results),(Get-ScriptForm -Script $script)
+if($Request.Body.script) {
+    try {
+        $results = @(Invoke-ScriptAnalyzer -ScriptDefinition $Request.Body.script)
+        $status = [HttpStatusCode]::OK
+    } catch {
+        $status = [HttpStatusCode]::BadRequest
+        $results = $_
+    }
+} else {
+    $status = [HttpStatusCode]::BadRequest
+    $results = "No script specified in the body."
+}
 
 # Associate values to output bindings by calling 'Push-OutputBinding'.
 Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
-    StatusCode = [HttpStatusCode]::OK
-    ContentType = "text/html"
-    Body = $html
+    StatusCode = $status
+    ContentType = "application/json"
+    Body = $results
 })

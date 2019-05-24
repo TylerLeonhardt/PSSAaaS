@@ -1,4 +1,11 @@
 {
   "$schema": "http://json.schemastore.org/proxies",
-  "proxies": {}
+  "proxies": {
+    "root": {
+      "matchCondition": {
+        "route": "/"
+      },
+      "backendUri": "https://pssafuncapp.azurewebsites.net/api/UI"
+    }
+  }
 }
