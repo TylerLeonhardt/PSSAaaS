@@ -11,13 +11,51 @@
     <link rel="stylesheet" data-name="vs/editor/editor.main"
         href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.17.0/min/vs/editor/editor.main.css">
     <style>
-        
+html,
+body {
+  height: 100%;
+  margin: 0
+}
+
+.box {
+  display: flex;
+  flex-flow: column;
+  height: 100%;
+}
+
+.box .flexrow.header {
+  flex: 0 1 auto;
+  /* The above is shorthand for:
+  flex-grow: 0,
+  flex-shrink: 1,
+  flex-basis: auto
+  */
+}
+
+.box .flexrow.content {
+  flex: 1 1 auto;
+}
+
+.box .flexrow.footer {
+  flex: 0 1 40px;
+}
     </style>
 </head>
 
-<body>
-    <h2 style="background-color:darkcyan; margin-top:0; color:white; padding:10px;">PowerShell Script Analyzer demo</h2>
-    <div id="container" style="width:90%; max-width:800px; height:600px; margin:0 auto; border:1px solid grey;"></div>
+<body class="box">
+    <div class="flexrow header">
+        <h2 style="background-color:darkcyan; margin-top:0; color:white; padding:10px;">PowerShell Script Analyzer demo</h2>
+    </div>
+    <div class="row flexrow content" style="margin: 0">
+        <div class="col-6">
+            <h5 style="background-color:darkslategrey; margin-top:0; color:white; padding:10px;">PowerShell Script</h3>
+            <div id="script" class="content" style="height: 86%; border:1px solid grey;"></div>
+        </div>
+        <div class="col-6">
+            <h5 style="background-color:darkslategrey; margin-top:0; color:white; padding:10px;">PSScriptAnalyzer Settings</h3>
+            <div id="settings" class="content" style="height: 86%; border:1px solid grey;"></div>
+        </div>
+    </div>
 
     <script type="text/javascript"
         src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.17.0/min/vs/loader.js"></script>
@@ -40,12 +78,17 @@
         };
 
         require(["vs/editor/editor.main"], function () {
-            const editor = monaco.editor.create(document.getElementById('container'), {
-                value: '$x = 1 \ngci',
+            const scriptEditor = monaco.editor.create(document.getElementById('script'), {
+                value: '$x = 1 \ngci\n\n[hashtable]::new()',
                 language: 'powershell',
                 automaticLayout: true
             });
 
+            const settingsEditor = monaco.editor.create(document.getElementById('settings'), {
+                value: '{\n\t"Rules": {\n\t\t"PSUseCompatibleSyntax": {\n\t\t\t"Enable": true,\n\t\t\t"TargetVersions": [ "3.0", "5.1", "6.2" ]\n\t\t}\n\t}\n}',
+                language: 'json',
+                automaticLayout: true
+            });
             const SeverityMap = [
                 2, // PSSA is 0 => Monaco is 2 for Info
                 4, // PSSA is 1 => Monaco is 4 for Warning
@@ -54,13 +97,24 @@
             ]
 
             const runPssa = async () => {
+
+                let settingsJson = {};
+                try {
+                    settingsJson = JSON.parse(settingsEditor.getModel().getLinesContent().join("\n"))
+                } catch (e) {
+                    return;
+                }
+
                 const rawResponse = await fetch('/api/ProcessScript', {
                     method: 'POST',
                     headers: {
                         'Accept': 'application/json',
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ script: editor.getModel().getLinesContent().join("\n") })
+                    body: JSON.stringify({
+                        script: scriptEditor.getModel().getLinesContent().join("\n"),
+                        settings: settingsJson
+                    })
                 });
 
                 const content = await rawResponse.json();
@@ -76,15 +130,17 @@
                     }
                 })
 
-                monaco.editor.setModelMarkers(editor.getModel(), 'test', markers);
+                monaco.editor.setModelMarkers(scriptEditor.getModel(), 'test', markers);
             }
 
             let typingTimer;
-            editor.onDidChangeModelContent((e) => {
+            const handleChange = (e) => {
                 if (typingTimer) { clearTimeout(typingTimer); }
 
                 typingTimer = setTimeout(runPssa, 200)
-            })
+            }
+            scriptEditor.onDidChangeModelContent(handleChange);
+            settingsEditor.onDidChangeModelContent(handleChange);
 
             runPssa()
         });
