@@ -22,6 +22,7 @@ if($Request.Body.script) {
 } elseif($Request.Body.ModuleName) {
     Write-Verbose "Module name specified." -Verbose
     $tmpDir = [System.IO.Path]::GetTempPath()
+    $modulePath = Join-Path $tmpDir $Request.Body.ModuleName
 
     try {
         Write-Verbose "Attempting to save module..." -Verbose
@@ -29,7 +30,7 @@ if($Request.Body.script) {
         Write-Verbose "Saved module..." -Verbose
         
         Write-Verbose "Attempting to invoke PSScriptAnalyzer..." -Verbose
-        $results = @(Invoke-ScriptAnalyzer -Path (Join-Path $tmpDir $Request.Body.ModuleName) -Recurse -Settings $settings)
+        $results = @(Invoke-ScriptAnalyzer -Path $modulePath -Recurse -Settings $settings)
         Write-Verbose "Invoked PSScriptAnalyzer..." -Verbose
 
         $status = [HttpStatusCode]::OK
@@ -37,7 +38,7 @@ if($Request.Body.script) {
         $status = [HttpStatusCode]::BadRequest
         $results = $_
     } finally {
-        Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $tmpDir
+        Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $modulePath
     }
 
 } else {
